@@ -45,8 +45,8 @@ def get_yearbounding_timestamps(year):
     late = datetime(year + 1, 1, 1)
     return int(early.timestamp()), int(late.timestamp())
 
-def update_cookie(august):
-    BACKLOGGD_HEADERS['Cookie'] = 'cookies_consent=true;remember_user_token=1; _august_app_session=' + august
+def update_cookie(session):
+    BACKLOGGD_HEADERS['Cookie'] = "ne_cookies_consent=true; _backloggd_session=" + session
 
 def update_csrf(key):
     BACKLOGGD_HEADERS['X-CSRF-Token'] = key
@@ -67,17 +67,26 @@ def get_game_id(name, early, late):
 
 def add_game(game_id, rating):
     data = {
-        'play_toggle': True,
-        'playing_toggle': False,
-        'backlog_toggle': False,
-        'wishlist_toggle': False,
-        'rating_modal': rating,
-        'status': 'completed',
-        'review': '',
-        'review_platform': '',
-        'hours': '',
-        'minutes': '',
-        'log_id': ''
+        'game_id': game_id,
+        'playthroughs[0][id]': -1,
+        'playthroughs[0][title]': 'Log',
+        'playthroughs[0][rating]': rating,
+        'playthroughs[0][review]': '',
+        'playthroughs[0][review_spoilers]': 'false',
+        'playthroughs[0][platform]': '',
+        'playthroughs[0][hours]': '',
+        'playthroughs[0][minutes]': '',
+        'playthroughs[0][is_master]': 'false',
+        'playthroughs[0][is_replay]': 'false',
+        'playthroughs[0][start_date]': '',
+        'playthroughs[0][finish_date]': '',
+        'log[is_play]': 'true',
+        'log[is_playing]': 'false',
+        'log[is_backlog]': 'false',
+        'log[is_wishlist]': 'false',
+        'log[status]': 'completed',
+        'log[id]': '',
+        'modal_type': 'quick'
     }
     backloggd_url = 'https://www.backloggd.com/api/user/' + str(backloggd_id) + '/log/' + str(game_id)
     add_request = s.post(backloggd_url, headers=BACKLOGGD_HEADERS, params=data)
@@ -89,7 +98,7 @@ def add_game(game_id, rating):
 update_cookie(backloggd_cookie)
 update_csrf(backloggd_csrf)
 not_found_games = open('notfound.txt','w')
-start_from_row = 107
+start_from_row = 1
 index = 0
 with open('games.csv','r') as csvfile:
     reader = csv.reader(csvfile, delimiter=',')
