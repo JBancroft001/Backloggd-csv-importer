@@ -72,10 +72,11 @@ def get_game_id(name, early, late):
 
 def add_game(game_id, rating, status='completed'):
     # Set status flags based on the status parameter
-    is_play = 'true' if status == 'completed' else 'false'
+    is_play = 'true' if status == 'completed' or 'played' or 'abandoned' or 'retired' or 'shelved' or 'abandoned' else 'false'
     is_playing = 'true' if status == 'playing' else 'false'
     is_backlog = 'true' if status == 'backlog' else 'false'
     is_wishlist = 'true' if status == 'wishlist' else 'false'
+    is_abandoned = 'true' if status == 'abandoned' else 'false'
     
     data = {
         'game_id': game_id,
@@ -130,7 +131,7 @@ with open('games.csv','r') as csvfile:
         rating = float(rating_str) * 2 if rating_str else ''
         # Handle optional status (default to 'completed')
         status = row[3].strip().lower() if len(row) > 3 and row[3].strip() else 'completed'
-        
+
         early, late = get_yearbounding_timestamps(year)
         trying = True
         while trying:
@@ -139,7 +140,7 @@ with open('games.csv','r') as csvfile:
                 response_status = add_game(game_id, rating, status)
                 trying = False
                 if response_status < 400:
-                    print('Added ' + name)
+                    print('Added ' + name + ' with status ' + status)
                 elif response_status == 429:
                     print('Hit request limit, pausing')
                     trying = True # try again
