@@ -41,6 +41,8 @@ BACKLOGGD_HEADERS = {
 }
 
 def get_yearbounding_timestamps(year):
+    if not year:
+        return None, None
     early = datetime(year, 1, 1)
     late = datetime(year + 1, 1, 1)
     return int(early.timestamp()), int(late.timestamp())
@@ -53,7 +55,10 @@ def update_csrf(key):
 
 def get_game_id(name, early, late):
     try:
-        body = 'fields name; search "%s"; where release_dates.date >= %s & release_dates.date <= %s;' % (name, early, late)
+        if early and late:
+            body = 'fields name; search "%s"; where release_dates.date >= %s & release_dates.date <= %s;' % (name, early, late)
+        else:
+            body = 'fields name; search "%s";' % (name)
         r = s.post(endpoint, headers=headers, data=body)
         j = json.loads(r.text)
         actual_game = [g['id'] for g in j]
@@ -112,8 +117,14 @@ with open('games.csv','r') as csvfile:
         if index < start_from_row:
             index += 1
             continue
-        name = row[0]
-        year = int(row[1])
+        if not row:
+            continue
+            
+        name = row[0].strip()
+        # Handle optional year
+        year_str = row[1].strip() if len(row) > 1 else ''
+        year = int(year_str) if year_str and year_str.isdigit() else None
+        
         # Handle optional rating (empty string or 0 means no rating)
         rating_str = row[2].strip() if len(row) > 2 and row[2].strip() else ''
         rating = float(rating_str) * 2 if rating_str else ''
