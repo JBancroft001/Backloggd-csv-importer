@@ -11,7 +11,7 @@ id = j['id']
 secret = j['secret']
 backloggd_id = j['backloggd_id']
 backloggd_csrf = j['csrf']
-backloggd_cookie = j['cookie']
+backloggd_session = j['_backloggd_session']
 
 access_url = 'https://id.twitch.tv/oauth2/token?client_id=%s&client_secret=%s&grant_type=client_credentials' % (id, secret)
 r = s.post(access_url)
@@ -31,11 +31,11 @@ BACKLOGGD_HEADERS = {
   'sec-ch-ua-mobile': '?0',
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36',
   'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-  'Origin': 'https://www.backloggd.com',
+  'Origin': 'https://backloggd.com',
   'Sec-Fetch-Site': 'same-origin',
   'Sec-Fetch-Mode': 'cors',
   'Sec-Fetch-Dest': 'empty',
-  'Referer': 'https://www.backloggd.com/',
+  'Referer': 'https://backloggd.com/',
   'Accept-Language': 'en-US,en;q=0.9',
   'Cookie': '',
 }
@@ -46,7 +46,7 @@ def get_yearbounding_timestamps(year):
     return int(early.timestamp()), int(late.timestamp())
 
 def update_cookie(session):
-    BACKLOGGD_HEADERS['Cookie'] = "ne_cookies_consent=true; _backloggd_session=" + session
+    BACKLOGGD_HEADERS['Cookie'] = f"has_js=true; auth_server=true; daily_tip=%2C%20don't%20tell%20anyone%20else%2C%20but%20you're%20my%20favorite%20user%20%3B); game-log-editor-mode=quick; _backloggd_session={session}"
 
 def update_csrf(key):
     BACKLOGGD_HEADERS['X-CSRF-Token'] = key
@@ -65,12 +65,18 @@ def get_game_id(name, early, late):
         print("Error getting game id " + name)
         return None
 
-def add_game(game_id, rating):
+def add_game(game_id, rating, status='completed'):
+    # Set status flags based on the status parameter
+    is_play = 'true' if status == 'completed' else 'false'
+    is_playing = 'true' if status == 'playing' else 'false'
+    is_backlog = 'true' if status == 'backlog' else 'false'
+    is_wishlist = 'true' if status == 'wishlist' else 'false'
+    
     data = {
         'game_id': game_id,
         'playthroughs[0][id]': -1,
         'playthroughs[0][title]': 'Log',
-        'playthroughs[0][rating]': rating,
+        'playthroughs[0][rating]': rating if rating else '',  # Handle empty ratings
         'playthroughs[0][review]': '',
         'playthroughs[0][review_spoilers]': 'false',
         'playthroughs[0][platform]': '',
@@ -80,22 +86,22 @@ def add_game(game_id, rating):
         'playthroughs[0][is_replay]': 'false',
         'playthroughs[0][start_date]': '',
         'playthroughs[0][finish_date]': '',
-        'log[is_play]': 'true',
-        'log[is_playing]': 'false',
-        'log[is_backlog]': 'false',
-        'log[is_wishlist]': 'false',
-        'log[status]': 'completed',
+        'log[is_play]': is_play,
+        'log[is_playing]': is_playing,
+        'log[is_backlog]': is_backlog,
+        'log[is_wishlist]': is_wishlist,
+        'log[status]': status,
         'log[id]': '',
         'modal_type': 'quick'
     }
-    backloggd_url = 'https://www.backloggd.com/api/user/' + str(backloggd_id) + '/log/' + str(game_id)
-    add_request = s.post(backloggd_url, headers=BACKLOGGD_HEADERS, params=data)
+    backloggd_url = 'https://backloggd.com/api/user/' + str(backloggd_id) + '/log/' + str(game_id)
+    add_request = s.post(backloggd_url, headers=BACKLOGGD_HEADERS, data=data)
     return add_request.status_code
 
 
 # Match game names to IGDB IDs, submit to backloggd
 # Games with no IDs will be written to text file notfound.txt
-update_cookie(backloggd_cookie)
+update_cookie(backloggd_session)
 update_csrf(backloggd_csrf)
 not_found_games = open('notfound.txt','w')
 start_from_row = 1
@@ -107,23 +113,30 @@ with open('games.csv','r') as csvfile:
             index += 1
             continue
         name = row[0]
-        rating = int(row[5])* 2
-        early, late = get_yearbounding_timestamps(int(row[2]))
+        year = int(row[1])
+        # Handle optional rating (empty string or 0 means no rating)
+        rating_str = row[2].strip() if len(row) > 2 and row[2].strip() else ''
+        rating = float(rating_str) * 2 if rating_str else ''
+        # Handle optional status (default to 'completed')
+        status = row[3].strip().lower() if len(row) > 3 and row[3].strip() else 'completed'
+        
+        early, late = get_yearbounding_timestamps(year)
         trying = True
         while trying:
             game_id = get_game_id(name, early, late)
             if game_id is not None:
-                status = add_game(game_id, rating)
+                response_status = add_game(game_id, rating, status)
                 trying = False
-                if status < 400:
+                if response_status < 400:
                     print('Added ' + name)
-                elif status == 429:
+                elif response_status == 429:
                     print('Hit request limit, pausing')
                     trying = True # try again
                     time.sleep(60*3)
                     print('Trying again')
                 else:
                     print('Game already added or headers error ' + name)
+                    print(response_status)
             else:
                 not_found_games.write(name + '\n')
                 trying = False
