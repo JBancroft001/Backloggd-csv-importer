@@ -1,6 +1,9 @@
 import requests, csv, json, sys, time
 from datetime import datetime
 
+# Configuration
+RETRY_WAIT_TIME = 120  # Seconds to wait when hitting rate limits (e.g., 429 error)
+
 s = requests.Session()
 
 # get IGDB creds
@@ -60,14 +63,16 @@ def get_game_id(name, early, late):
         else:
             body = 'fields name; search "%s";' % (name)
         r = s.post(endpoint, headers=headers, data=body)
+        if r.status_code == 429:
+            return 429
         j = json.loads(r.text)
         actual_game = [g['id'] for g in j]
         if len(actual_game) > 0:
             return actual_game[0] # this is the ID
         else:
             return None # game not found
-    except:
-        print("Error getting game id " + name)
+    except Exception as e:
+        print(f"Error getting game id {name}: {e}")
         return None
 
 def add_game(game_id, rating, status='completed'):
@@ -136,19 +141,26 @@ with open('games.csv','r') as csvfile:
         trying = True
         while trying:
             game_id = get_game_id(name, early, late)
+            
+            if game_id == 429:
+                print(f'Hit IGDB request limit, pausing for {RETRY_WAIT_TIME} seconds...')
+                time.sleep(RETRY_WAIT_TIME)
+                continue # Retry getting ID
+                
             if game_id is not None:
                 response_status = add_game(game_id, rating, status)
-                trying = False
                 if response_status < 400:
                     print('Added ' + name + ' with status ' + status)
+                    trying = False
                 elif response_status == 429:
-                    print('Hit request limit, pausing')
-                    trying = True # try again
-                    time.sleep(60*3)
+                    print(f'Hit Backloggd request limit for {name}, pausing for {RETRY_WAIT_TIME} seconds...')
+                    time.sleep(RETRY_WAIT_TIME)
                     print('Trying again')
+                    # trying remains True, loop will retry get_game_id and add_game
                 else:
                     print('Game already added or headers error ' + name)
                     print(response_status)
+                    trying = False
             else:
                 not_found_games.write(name + '\n')
                 trying = False
