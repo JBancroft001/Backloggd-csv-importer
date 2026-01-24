@@ -99,11 +99,97 @@ Ratings use a **5-star scale**:
 - **`backlog`** - Want to play
 - **`wishlist`** - Interested in
 
+Additional valid statuses: `played`, `abandoned`, `retired`, `shelved`
+
 
 ## Usage
+
+### Basic Usage
 
 ```bash
 python backloggd.py
 ```
 
-Games not found in IGDB will be written to `notfound.txt`.
+This will import games from `games.csv` using the default settings.
+
+### Command-Line Options
+
+The script now supports various command-line options for flexibility:
+
+```bash
+python backloggd.py [csv_file] [options]
+```
+
+**Positional Arguments:**
+- `csv_file` - Path to CSV file (default: `games.csv`)
+
+**Optional Arguments:**
+- `--config CONFIG` - Path to config file (default: `backloggd.json`)
+- `--not-found FILE` - Path to not-found log file (default: `notfound.txt`)
+- `--start-row N` - Row number to start from (default: 1, skips header row 0)
+- `--dry-run` - Preview import without making changes to Backloggd
+- `--verbose` - Show detailed debug output
+- `-h, --help` - Show help message
+
+### Examples
+
+**Preview import without making changes:**
+```bash
+python backloggd.py --dry-run
+```
+
+**Import from a custom CSV file:**
+```bash
+python backloggd.py my_games.csv
+```
+
+**Resume from a specific row (useful if import was interrupted):**
+```bash
+python backloggd.py --start-row 50
+```
+
+**Show detailed debug output:**
+```bash
+python backloggd.py --verbose
+```
+
+**Use custom config file:**
+```bash
+python backloggd.py --config custom_config.json
+```
+
+**Combine multiple options:**
+```bash
+python backloggd.py my_games.csv --dry-run --verbose --start-row 10
+```
+
+### Features
+
+- ✅ **Progress Tracking** - Shows "Processing game X of Y" with current progress
+- ✅ **Input Validation** - Validates year (1950-2050), rating (0-5), and status
+- ✅ **Error Handling** - Graceful handling of network errors, rate limits, and authentication issues
+- ✅ **Logging** - Outputs to both console and `backloggd_import.log` file
+- ✅ **Dry-Run Mode** - Preview what will be imported without making changes
+- ✅ **Resume Support** - Resume from any row if import is interrupted
+- ✅ **Not Found Tracking** - Games not found in IGDB are written to `notfound.txt`
+
+### Troubleshooting
+
+**Games not being found:**
+- Check spelling in your CSV file (common typos: "Deadsapce" → "Dead Space", "Rouge Legacy" → "Rogue Legacy")
+- Include the release year to help matching
+- Check `notfound.txt` for a list of games that couldn't be matched
+
+**Authentication errors:**
+- Your CSRF token and session cookie may have expired
+- Follow the setup instructions again to get fresh credentials
+
+**Rate limiting:**
+- The script automatically handles rate limits with exponential backoff
+- IGDB: Waits 120 seconds when rate limit is hit
+- Backloggd: Waits 300 seconds when rate limit is hit
+
+**Checking logs:**
+- Review `backloggd_import.log` for detailed execution history
+- Use `--verbose` flag for more detailed console output
+
