@@ -4,6 +4,9 @@ backloggd.json
 # Output file tracking games not found on Backloggd
 notfound.txt
 
+# Log file from imports
+backloggd_import.log
+
 # Python
 __pycache__/
 *.py[cod]
