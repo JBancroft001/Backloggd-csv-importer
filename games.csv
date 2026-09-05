@@ -1,9 +1,9 @@
-Game,Year Released,Rating,Status
-Final Fantasy 7,1997,5,abandoned
-Elden Ring,2022,5,completed
-Hollow Knight,2017,4.5,playing
-Hades,2020,4,backlog
-Silksong,2025,,wishlist
-Dark Souls,2011,4.5,played
-Cyberpunk 2077,2020,3.5,retired
-Fallout 4,2015,3,shelved
+Game,Year Released,Rating,Status,Date Played
+Final Fantasy 7,1997,5,abandoned,
+Elden Ring,2022,5,completed,2022-05-25
+Hollow Knight,2017,4.5,playing,
+Hades,2020,4,backlog,
+Silksong,2025,,wishlist,
+Dark Souls,2011,4.5,played,03/15/2022
+Cyberpunk 2077,2020,3.5,retired,
+Fallout 4,2015,3,shelved,

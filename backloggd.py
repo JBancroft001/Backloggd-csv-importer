@@ -10,7 +10,7 @@ import os
 import time
 import argparse
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 
 from config import get_backloggd_credentials, set_config_path, ConfigError
@@ -112,18 +112,20 @@ def add_game_to_backloggd(
     game_id: int,
     rating: str,
     status: str = "completed",
-    dry_run: bool = False
+    dry_run: bool = False,
+    finish_date: str = ""
 ) -> int:
     """
     Submit a game log request to Backloggd.
-    
+
     Args:
         headers: HTTP headers for the request
         game_id: IGDB game ID
         rating: Game rating (0-10 scale, or empty string)
         status: Game status (completed, playing, backlog, wishlist, etc.)
         dry_run: If True, don't actually make the request
-        
+        finish_date: Date played in YYYY-MM-DD format, or empty string
+
     Returns:
         HTTP status code
     """
@@ -152,6 +154,11 @@ def add_game_to_backloggd(
         "playthroughs[0][minutes]": "",
         "playthroughs[0][is_master]": "false",
         "playthroughs[0][is_replay]": "false",
+        # NOTE: "Date Played" is NOT stored in playthroughs[0][finish_date] --
+        # Backloggd ignores that field (it stays empty in real requests too).
+        # The actual date lives in a separate dates[] structure, added below only
+        # when a date is provided. A missing/empty "Date Played" therefore sends
+        # no dates[] block, i.e. "no date set" (the null case).
         "playthroughs[0][start_date]": "",
         "playthroughs[0][finish_date]": "",
         "log[is_play]": is_play,
@@ -162,6 +169,35 @@ def add_game_to_backloggd(
         "log[id]": "",
         "modal_type": "quick",
     }
+
+    # Attach a "Date Played" as a one-day date range in Backloggd's dates[] block.
+    # Confirmed via browser capture: a played day is stored as
+    #   dates[-1][0][range_start_date] = the day played (e.g. 2026-09-15)
+    #   dates[-1][0][range_end_date]   = that day + 1    (e.g. 2026-09-16)
+    # `[-1]` mirrors the new playthrough id (-1). status=5/edited=true come from
+    # the same capture. finish_date is already normalized to YYYY-MM-DD upstream.
+    if finish_date:
+        try:
+            start = datetime.strptime(finish_date, "%Y-%m-%d")
+            end = start + timedelta(days=1)
+            data.update({
+                "dates[-1][0][id]": -1,
+                "dates[-1][0][range_start_date]": start.strftime("%Y-%m-%d"),
+                "dates[-1][0][range_end_date]": end.strftime("%Y-%m-%d"),
+                "dates[-1][0][edited]": "true",
+                "dates[-1][0][status]": "5",
+                "dates[-1][0][note]": "",
+                "dates[-1][0][hours]": "",
+                "dates[-1][0][minutes]": "",
+                "dates[-1][0][start_date]": "",
+                "dates[-1][0][finish_date]": "",
+                "dates[-1][0][privacy]": "",
+            })
+        except ValueError:
+            logger.warning(
+                f"Could not interpret 'Date Played' value '{finish_date}' for game {game_id}; "
+                f"skipping date. Expected YYYY-MM-DD."
+            )
     
     creds = get_backloggd_credentials()
     user_id = creds["backloggd_id"]
@@ -266,6 +302,51 @@ def validate_status(status_str: str, game_name: str) -> str:
     return status
 
 
+# Accepted input formats for the "Date Played" column (tried in order).
+DATE_INPUT_FORMATS = [
+    "%Y-%m-%d",   # 2022-03-15
+    "%Y/%m/%d",   # 2022/03/15
+    "%m/%d/%Y",   # 03/15/2022
+    "%m-%d-%Y",   # 03-15-2022
+    "%d/%m/%Y",   # 15/03/2022
+    "%d-%m-%Y",   # 15-03-2022
+    "%Y.%m.%d",   # 2022.03.15
+]
+
+
+def validate_date(date_str: str, game_name: str) -> str:
+    """
+    Validate and normalize the "Date Played" value from the CSV.
+
+    Accepts several common formats (e.g. 2022-03-15, 03/15/2022, 15/03/2022)
+    and normalizes them to the YYYY-MM-DD format that Backloggd expects.
+
+    Args:
+        date_str: Date string from CSV (may be empty)
+        game_name: Game name (for logging)
+
+    Returns:
+        Date as a YYYY-MM-DD string, or empty string if missing/invalid
+    """
+    if not date_str or not date_str.strip():
+        return ""
+
+    date_str = date_str.strip()
+
+    for fmt in DATE_INPUT_FORMATS:
+        try:
+            parsed = datetime.strptime(date_str, fmt)
+            return parsed.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    logger.warning(
+        f"Unrecognized date format '{date_str}' for '{game_name}', skipping date played. "
+        f"Expected one of: YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY"
+    )
+    return ""
+
+
 def validate_csv_header(header: list) -> None:
     """
     Validate CSV header matches expected format.
@@ -273,7 +354,7 @@ def validate_csv_header(header: list) -> None:
     Args:
         header: First row of CSV file
     """
-    expected = ["Game", "Year Released", "Rating", "Status"]
+    expected = ["Game", "Year Released", "Rating", "Status", "Date Played"]
     
     if header != expected:
         logger.warning("CSV header doesn't match expected format")
@@ -345,10 +426,12 @@ def process_csv(
                 year = validate_year(row[1] if len(row) > 1 else "", name)
                 rating = validate_rating(row[2] if len(row) > 2 else "", name)
                 status = validate_status(row[3] if len(row) > 3 else "", name)
+                date_played = validate_date(row[4] if len(row) > 4 else "", name)
                 
                 logger.info(
                     f"[{processed}/{total_rows}] Processing: {name} "
-                    f"({year if year else 'No Year'})..."
+                    f"({year if year else 'No Year'}"
+                    f"{', played ' + date_played if date_played else ''})..."
                 )
                 
                 success = False
@@ -361,12 +444,15 @@ def process_csv(
                         continue
                     
                     if game_id:
-                        res = add_game_to_backloggd(headers, game_id, rating, status, dry_run)
+                        res = add_game_to_backloggd(
+                            headers, game_id, rating, status, dry_run, date_played
+                        )
                         
                         if res < 400:
                             logger.info(
                                 f"  {'[DRY RUN] Would add' if dry_run else 'Added'}: "
-                                f"{name} ({status}) -> {match_name}"
+                                f"{name} ({status}"
+                                f"{', played ' + date_played if date_played else ''}) -> {match_name}"
                             )
                             success = True
                         elif res == 401:

@@ -69,12 +69,12 @@ Create a file named `backloggd.json` in the same directory as the script and pas
 Your CSV should have the following columns:
 
 ```csv
-Game,Year Released,Rating,Status
-Elden Ring,2022,5,completed
-Hollow Knight,2017,4.5,completed
-Silksong,2024,,wishlist
-Hades,2020,4,backlog
-Cyberpunk 2077,2020,3.5,playing
+Game,Year Released,Rating,Status,Date Played
+Elden Ring,2022,5,completed,2022-05-25
+Hollow Knight,2017,4.5,playing,
+Silksong,2024,,wishlist,
+Hades,2020,4,backlog,
+Cyberpunk 2077,2020,3.5,playing,03/15/2022
 ```
 
 | Column | Required | Description |
@@ -83,6 +83,7 @@ Cyberpunk 2077,2020,3.5,playing
 | **Year Released** | ✅ Yes | Release year (helps IGDB find the correct game) |
 | **Rating** | ❌ No | Your rating on a **5-star scale** (use decimals for half stars: 4.5, 3.5, etc.). Leave empty for no rating. |
 | **Status** | ❌ No | Game status: `completed`, `playing`, `backlog`, or `wishlist`. Defaults to `completed` if not specified. |
+| **Date Played** | ❌ No | The date you played/finished the game. Leave empty for none. (See below.) |
 
 ### Rating System
 
@@ -91,6 +92,22 @@ Ratings use a **5-star scale**:
 - Use **0-5** scale (e.g., `3`, `4`, `5`)
 - Supports **half stars** using decimals: `3.5`, `4.5`, etc.
 - The script automatically converts your 5-star rating to Backloggd's 10-point scale (e.g., `4.5` stars → `9/10`)
+
+### Date Played
+
+This is the date you played or finished the game. It shows up on the game's entry in your Backloggd log. It's optional — leave it blank to skip.
+
+The script accepts several common formats and normalizes them to `YYYY-MM-DD` before sending:
+
+| Format | Example |
+|--------|---------|
+| `YYYY-MM-DD` (recommended) | `2022-05-25` |
+| `YYYY/MM/DD` | `2022/05/25` |
+| `MM/DD/YYYY` (US) | `05/25/2022` |
+| `DD/MM/YYYY` | `25/05/2022` |
+| `YYYY.MM.DD` | `2022.05.25` |
+
+> **Note:** For ambiguous `DD/MM` vs `MM/DD` dates, US `MM/DD/YYYY` is tried first (so `03/15/2022` = March 15). Use `YYYY-MM-DD` to avoid ambiguity.
 
 ### Status Options
 
